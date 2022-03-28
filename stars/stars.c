@@ -1,14 +1,15 @@
 /* vim: ts=4 sts=4 sw=4 noet: 
 */
+#include <stdio.h>
+#include <exec/types.h>
 #include <proto/intuition.h>
 #include <proto/dos.h>
+#include <clib/exec_protos.h>
 #include <intuition/screens.h>
 #include <graphics/rastport.h>
 #include <hardware/cia.h>
-#include <stdio.h>
+#include "precalc.h"
 
-#define BLACK 0x000
-#define WHITE 0xfff
 
 #define NUM_STARS 100
 #define Z_MAX 256
@@ -26,6 +27,8 @@
 #define CENTER_X (SCREEN_X / 2)
 #define CENTER_Y (SCREEN_Y / 2)
 
+#define MAX_DRIFT_X 60
+#define MAX_DRIFT_Y 30
 
 __far extern struct CIA ciaa;
 
@@ -41,7 +44,7 @@ struct Star {
 static struct Star stars[NUM_STARS] = {};
 
 static struct Screen * initScreen();
-static void drawStar(struct RastPort *rp, struct Star *star);
+static void drawStar(struct RastPort *rp, struct Star *star, UWORD centerX, UWORD centerY);
 static void initStar(struct Star *star);
 static void update();
 static BOOL isMouseClicked();
@@ -54,9 +57,10 @@ void main() {
 		return;
 	}
 
+	initPreCalc();
+
 	for (int i = 0; i < NUM_STARS; i++) {
 		initStar(&stars[i]);
-		drawStar(&screen0->RastPort, &stars[i]);
 	}
 
 	while (1) {
@@ -74,6 +78,7 @@ void main() {
 	printf("bye\n");
 
 	CloseScreen(screen0);
+
 }
 
 static struct Screen * initScreen() {
@@ -104,13 +109,14 @@ static void initStar(struct Star *star) {
 	WORD maxY = SCREEN_Y;
 	star->x = RangeRand(maxX * 2) - maxX;
 	star->y = RangeRand(maxY * 2) - maxY;
+	/* avoid stars right in the middle as they would stay there */
 	if (star->x == 0 && star->y == 0) {
 		star->x = 1;
 	}
 	star->z = Z_MAX;
 }
 
-static void drawStar(struct RastPort *rp, struct Star *star) {
+static void drawStar(struct RastPort *rp, struct Star *star, UWORD centerX, UWORD centerY) {
 	WORD gx, gy;
 	/* calculate brightness */
 	UWORD color = (Z_MAX - star->z) * MAX_COLOR / Z_MAX + 1;
@@ -118,8 +124,8 @@ static void drawStar(struct RastPort *rp, struct Star *star) {
 		color = MAX_COLOR;
 	}
 	SetAPen(rp, color);
-	gx = star->x * 256 / star->z + CENTER_X;
-	gy = star->y * 256 / star->z + CENTER_Y;
+	gx = star->x * 256 / star->z + centerX;
+	gy = star->y * 256 / star->z + centerY;
 	if (gx < SCREEN_X && gx >= 0 && gy < SCREEN_Y && gy >= 0) {
 		WritePixel(rp, gx, gy);
 	}
@@ -129,10 +135,23 @@ static void drawStar(struct RastPort *rp, struct Star *star) {
 }
 
 static void update() {
+	static UWORD driftX = 0;
+	static UWORD driftY = 90;
+	UWORD centerX = CENTER_X;
+	UWORD centerY = CENTER_Y;
 	/* paint it black */
 	SetRast(&screen0->RastPort, 0);
+
+	if (MAX_DRIFT_X > 0) {
+		centerX += pcSin(driftX) / 1000.0 * MAX_DRIFT_X;
+		driftX = (driftX + 1) % 360;
+	}
+	if (MAX_DRIFT_Y > 0) {
+		centerY += pcSin(driftY) / 1000.0 * MAX_DRIFT_Y;
+		driftY = (driftY + 2) % 360;
+	}
 	for (int i = 0; i < NUM_STARS; i++) {
-		drawStar(&screen0->RastPort, &stars[i]);
+		drawStar(&screen0->RastPort, &stars[i], centerX, centerY);
 		stars[i].z -= SPEED_Z;
 		if (stars[i].z == 0) {
 			stars[i].z = -1;
