@@ -143,11 +143,11 @@ static void update() {
 	SetRast(&screen0->RastPort, 0);
 
 	if (MAX_DRIFT_X > 0) {
-		centerX += pcSin(driftX) / 1000.0 * MAX_DRIFT_X;
+		centerX += (float) pcSin(driftX) * MAX_DRIFT_X / TRIG_SCALE;
 		driftX = (driftX + 1) % 360;
 	}
 	if (MAX_DRIFT_Y > 0) {
-		centerY += pcSin(driftY) / 1000.0 * MAX_DRIFT_Y;
+		centerY += (float) pcSin(driftY) * MAX_DRIFT_Y / TRIG_SCALE;
 		driftY = (driftY + 2) % 360;
 	}
 	for (int i = 0; i < NUM_STARS; i++) {
